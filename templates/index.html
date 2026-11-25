@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบวัดปฏิกิริยาการตอบสนองแบบไร้สาย</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .light-bulb { transition: all 0.08s ease; }
+        .light-green {
+            background-color: #22c55e !important;
+            box-shadow: 0 0 35px #22c55e;
+            transform: scale(1.06);
+            border-color: #bbf7d0 !important;
+            color: #052e16 !important;
+        }
+        .light-red {
+            background-color: #ef4444 !important;
+            box-shadow: 0 0 35px #ef4444;
+            transform: scale(1.06);
+            border-color: #fecaca !important;
+            color: #ffffff !important;
+        }
+        .light-blue {
+            background-color: #3b82f6 !important;
+            box-shadow: 0 0 35px #3b82f6;
+            transform: scale(1.06);
+            border-color: #bfdbfe !important;
+            color: #ffffff !important;
+        }
+        .light-yellow {
+            background-color: #eab308 !important;
+            box-shadow: 0 0 35px #eab308;
+            transform: scale(1.06);
+            border-color: #fef08a !important;
+            color: #422006 !important;
+        }
+        .light-purple {
+            background-color: #a855f7 !important;
+            box-shadow: 0 0 35px #a855f7;
+            transform: scale(1.06);
+            border-color: #e9d5ff !important;
+            color: #ffffff !important;
+        }
+        .light-hit {
+            background-color: #38bdf8 !important;
+            box-shadow: 0 0 25px #38bdf8;
+        }
+        .light-disabled {
+            opacity: 0.25;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+
+    <!-- แถบเมนูด้านบน -->
+    <nav class="bg-slate-800 border-b border-slate-700 px-6 py-4 flex justify-between items-center">
+        <div class="text-xl font-bold text-emerald-400">⚡ Reaction Time System</div>
+        <div class="space-x-3">
+            <button onclick="showView('dashboard')" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 font-medium">📊 แดชบอร์ด & ดาต้าเบส</button>
+            <button onclick="showView('game-select')" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-white">🎮 เลือกเกม</button>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-6">
+
+        <!-- ==================== 1. หน้าแดชบอร์ด & ดาต้าเบส ==================== -->
+        <section id="view-dashboard">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h1 class="text-2xl font-bold">แดชบอร์ดและฐานข้อมูล (SQLite3)</h1>
+                    <p class="text-slate-400 text-sm">ข้อมูลทุกการทดสอบถูกจัดเก็บถาวรและสามารถเรียกดูย้อนหลังได้ตลอด</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                    <div class="text-slate-400 text-sm">ผู้เล่นในระบบทั้งหมด</div>
+                    <div id="stat-players" class="text-3xl font-bold text-blue-400 mt-1">0</div>
+                </div>
+                <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                    <div class="text-slate-400 text-sm">จำนวนรอบทดสอบทั้งหมด</div>
+                    <div id="stat-total" class="text-3xl font-bold text-white mt-1">0</div>
+                </div>
+                <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                    <div class="text-slate-400 text-sm">เวลาตอบสนองเฉลี่ยรวม</div>
+                    <div id="stat-avg" class="text-3xl font-bold text-emerald-400 mt-1">-</div>
+                </div>
+                <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                    <div class="text-slate-400 text-sm">สถิติเร็วที่สุด (Best)</div>
+                    <div id="stat-best" class="text-3xl font-bold text-amber-400 mt-1">-</div>
+                </div>
+            </div>
+
+            <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                <div class="p-4 border-b border-slate-700 font-semibold flex justify-between items-center">
+                    <span>ตารางบันทึกประวัติการฝึกซ้อม (Persistent Sessions)</span>
+                    <input type="text" id="search-player" oninput="filterTable()" placeholder="🔍 ค้นหาชื่อผู้เล่น..." 
+                           class="bg-slate-900 border border-slate-600 rounded-lg px-3 py-1.5 text-sm font-normal text-white">
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-700/50 text-slate-300">
+                            <tr>
+                                <th class="p-3">ID</th>
+                                <th class="p-3">ชื่อผู้เล่น</th>
+                                <th class="p-3">โหมดเกม</th>
+                                <th class="p-3">กดสำเร็จ / พลาด</th>
+                                <th class="p-3">เวลาเฉลี่ย (ms)</th>
+                                <th class="p-3">เร็วสุด (ms)</th>
+                                <th class="p-3">วันเวลาที่บันทึก</th>
+                                <th class="p-3">ข้อมูลเชิงลึก</th>
+                            </tr>
+                        </thead>
+                        <tbody id="db-table-body" class="divide-y divide-slate-700">
+                            <tr><td colspan="8" class="p-4 text-center text-slate-400">กำลังโหลดข้อมูล...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 2. หน้าเลือกเกม (Game Selection) ==================== -->
+        <section id="view-game-select" class="hidden">
+            <h1 class="text-2xl font-bold mb-2">🎮 เลือกโหมดการทดสอบ</h1>
+            <p class="text-slate-400 mb-6">เลือกเกมที่ต้องการทดสอบสมรรถภาพการตอบสนอง</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- เกม 1 -->
+                <div onclick="openGameIntro('simple')" class="cursor-pointer bg-slate-800 hover:bg-slate-700/80 border border-slate-700 hover:border-emerald-500 rounded-2xl p-6 transition">
+                    <div class="flex justify-between items-start mb-3">
+                        <span class="px-3 py-1 bg-blue-500/20 text-blue-400 rounded-full text-xs font-bold">เกมที่ 1 • ไฟ 1 ดวง</span>
+                        <span class="text-2xl">🎯</span>
+                    </div>
+                    <h2 class="text-xl font-bold text-white mb-2">Simple Reaction Time</h2>
+                    <p class="text-slate-400 text-sm">ทดสอบปฏิกิริยาพื้นฐาน ไฟจะติดเฉพาะดวงตรงกลาง (ดวงที่ 3) วัดความเร็วระบบประสาทโดยไม่ต้องเลือกตำแหน่ง</p>
+                </div>
+
+                <!-- เกม 2 -->
+                <div onclick="openGameIntro('choice')" class="cursor-pointer bg-slate-800 hover:bg-slate-700/80 border border-slate-700 hover:border-emerald-500 rounded-2xl p-6 transition">
+                    <div class="flex justify-between items-start mb-3">
+                        <span class="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-xs font-bold">เกมที่ 2 • ไฟ 5 ดวง</span>
+                        <span class="text-2xl">⚡</span>
+                    </div>
+                    <h2 class="text-xl font-bold text-white mb-2">Choice Reaction Time</h2>
+                    <p class="text-slate-400 text-sm">สุ่มไฟติด 1 ใน 5 ดวงแบบไม่ซ้ำตำแหน่ง วัดความเร็วในการมองเห็น การตัดสินใจ และการเคลื่อนไหวตอบสนอง</p>
+                </div>
+
+                <!-- เกม 3 -->
+                <div onclick="openGameIntro('gonogo')" class="cursor-pointer bg-slate-800 hover:bg-slate-700/80 border border-slate-700 hover:border-emerald-500 rounded-2xl p-6 transition">
+                    <div class="flex justify-between items-start mb-3">
+                        <span class="px-3 py-1 bg-amber-500/20 text-amber-400 rounded-full text-xs font-bold">เกมที่ 3 • ไฟ 5 ดวง (2 สี)</span>
+                        <span class="text-2xl">🚦</span>
+                    </div>
+                    <h2 class="text-xl font-bold text-white mb-2">Go / No-Go (แยกแยะสี)</h2>
+                    <p class="text-slate-400 text-sm">ไฟสีเขียวให้รีบกด ไฟสีแดงห้ามกดเด็ดขาด! วัดการควบคุมสติและความแม่นยำในการตัดสินใจภายใต้ความกดดัน</p>
+                </div>
+
+                <!-- เกม 4 -->
+                <div onclick="openGameIntro('blitz')" class="cursor-pointer bg-slate-800 hover:bg-slate-700/80 border border-slate-700 hover:border-emerald-500 rounded-2xl p-6 transition">
+                    <div class="flex justify-between items-start mb-3">
+                        <span class="px-3 py-1 bg-rose-500/20 text-rose-400 rounded-full text-xs font-bold">เกมที่ 4 • ไฟ 5 ดวง (30 วิ)</span>
+                        <span class="text-2xl">🔥</span>
+                    </div>
+                    <h2 class="text-xl font-bold text-white mb-2">Speed Blitz & Fatigue</h2>
+                    <p class="text-slate-400 text-sm">กดไฟต่อเนื่องภายใน 30 วินาทีให้ได้มากที่สุด เพื่อวัดความอึดของระบบประสาทและวิเคราะห์ดัชนีความเหนื่อยล้า</p>
+                </div>
+
+                <!-- เกม 5 (ใหม่) -->
+                <div onclick="openGameIntro('colormatch')" class="cursor-pointer bg-slate-800 hover:bg-slate-700/80 border border-slate-700 hover:border-purple-500 rounded-2xl p-6 transition">
+                    <div class="flex justify-between items-start mb-3">
+                        <span class="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs font-bold">เกมที่ 5 • ไฟ 5 ดวง (หลากสี)</span>
+                        <span class="text-2xl">🎨</span>
+                    </div>
+                    <h2 class="text-xl font-bold text-white mb-2">Color Match (กำหนดสีเป้าหมาย)</h2>
+                    <p class="text-slate-400 text-sm">กำหนดสีที่ต้องการให้กด ปุ่มทั้ง 5 จะสุ่มขึ้นหลายสีพร้อมกัน ต้องแยกแยะและรีบกดเฉพาะปุ่มที่เป็นสีเป้าหมายเท่านั้น</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 3. หน้าอธิบายวิธีเล่น + กรอกชื่อผู้เล่น ==================== -->
+        <section id="view-game-intro" class="hidden">
+            <button onclick="showView('game-select')" class="mb-4 text-slate-400 hover:text-white text-sm">← กลับไปหน้าเลือกเกม</button>
+
+            <div class="bg-slate-800 rounded-2xl border border-slate-700 p-8 max-w-3xl mx-auto text-center">
+                <span id="intro-light-badge" class="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-sm font-semibold"></span>
+                <h1 id="intro-title" class="text-3xl font-bold mt-4 mb-2"></h1>
+                <p id="intro-desc" class="text-slate-300 mb-6"></p>
+
+                <!-- แสดงภาพ GIF ตัวอย่างตามเกมที่เลือก -->
+                <div class="bg-slate-900 rounded-xl p-4 mb-6 border border-slate-700 flex flex-col items-center">
+                    <div class="text-xs text-slate-400 mb-2">ตัวอย่างวิธีการเล่น (GIF Animation)</div>
+                    <img id="intro-gif" src="" alt="ตัวอย่างวิธีเล่น" class="max-h-56 rounded-lg shadow-lg">
+                    <div id="gif-fallback" class="hidden py-6 px-6 text-slate-400 border-2 border-dashed border-slate-600 rounded-lg w-full">
+                        <p class="text-sm">วางไฟล์ภาพเคลื่อนไหวไว้ที่ <code id="gif-path-hint" class="text-emerald-400"></code></p>
+                    </div>
+                </div>
+
+                <!-- กรอกชื่อผู้เล่นและตั้งค่าก่อนเข้าเกม -->
+                <div class="bg-slate-900/70 p-5 rounded-xl border border-slate-700 text-left mb-6 space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-emerald-400 mb-1">ชื่อผู้เล่น (จำเป็นต้องกรอก) *</label>
+                            <input type="text" id="input-player-name" list="player-history-list" placeholder="พิมพ์ชื่อผู้เล่น เช่น สมชาย"
+                                   class="w-full bg-slate-800 border border-slate-600 focus:border-emerald-500 rounded-lg p-2.5 text-white outline-none">
+                            <datalist id="player-history-list"></datalist>
+                            <p class="text-xs text-slate-400 mt-1">หากพิมพ์ชื่อเดิม ระบบจะรวมสถิติเข้าประวัติเดิมให้ทันที</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-1">ประเภทกีฬา (ไม่บังคับ)</label>
+                            <input type="text" id="input-sport-type" placeholder="เช่น แบดมินตัน, ฟุตบอล"
+                                   class="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white outline-none">
+                        </div>
+                    </div>
+
+                    <!-- ส่วนเลือกสีเป้าหมาย (แสดงเฉพาะเกมที่ 5: Color Match) -->
+                    <div id="color-setting-box" class="hidden pt-2 border-t border-slate-700">
+                        <label class="block text-sm font-medium text-purple-400 mb-2">🎨 กำหนดสีเป้าหมายที่ต้องกด:</label>
+                        <div class="flex flex-wrap gap-3" id="color-picker-buttons">
+                            <button type="button" onclick="selectTargetColor('blue')" data-color="blue" class="color-opt px-4 py-2 rounded-lg bg-blue-600 text-white font-bold border-2 border-white">สีน้ำเงิน</button>
+                            <button type="button" onclick="selectTargetColor('green')" data-color="green" class="color-opt px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold border-2 border-transparent opacity-70">สีเขียว</button>
+                            <button type="button" onclick="selectTargetColor('red')" data-color="red" class="color-opt px-4 py-2 rounded-lg bg-red-600 text-white font-bold border-2 border-transparent opacity-70">สีแดง</button>
+                            <button type="button" onclick="selectTargetColor('yellow')" data-color="yellow" class="color-opt px-4 py-2 rounded-lg bg-yellow-500 text-slate-900 font-bold border-2 border-transparent opacity-70">สีเหลือง</button>
+                            <button type="button" onclick="selectTargetColor('purple')" data-color="purple" class="color-opt px-4 py-2 rounded-lg bg-purple-600 text-white font-bold border-2 border-transparent opacity-70">สีม่วง</button>
+                        </div>
+                    </div>
+
+                    <div id="round-setting-box">
+                        <label class="block text-sm text-slate-400 mb-1">จำนวนครั้งที่ต้องกด (รอบ)</label>
+                        <input type="number" id="input-rounds" value="10" min="3" max="50"
+                               class="w-full md:w-48 bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white">
+                    </div>
+                </div>
+
+                <button onclick="startGameFlow()" class="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white text-xl font-bold rounded-xl shadow-lg transition">
+                    ▶ เริ่มเกม (ไฟกระพริบแดง 4 ครั้ง → เขียวเริ่ม!)
+                </button>
+            </div>
+        </section>
+
+        <!-- ==================== 4. หน้าเล่นเกมแบบเรียลไทม์ ==================== -->
+        <section id="view-game-play" class="hidden">
+            <div class="flex flex-wrap justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6 gap-4">
+                <div>
+                    <span class="text-slate-400 text-sm">ผู้เล่น:</span>
+                    <span id="live-player" class="font-bold text-emerald-400 ml-1"></span>
+                    <span class="mx-2 text-slate-600">|</span>
+                    <span id="live-counter-label" class="text-slate-400 text-sm">รอบที่:</span>
+                    <span id="live-counter" class="text-2xl font-bold text-white ml-1">0</span>
+                </div>
+                <div id="live-status" class="text-lg font-bold text-amber-400">เตรียมตัว...</div>
+                <button onclick="abortGame()" class="px-3 py-1.5 bg-red-600/80 hover:bg-red-600 rounded-lg text-sm">ยกเลิกเกม</button>
+            </div>
+
+            <!-- ป้ายแจ้งสีเป้าหมาย (แสดงเฉพาะเกม 5) -->
+            <div id="target-color-banner" class="hidden mb-6 p-3 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center gap-3">
+                <span class="text-slate-300 font-medium">สีเป้าหมายที่ต้องกด:</span>
+                <span id="target-color-chip" class="px-4 py-1 rounded-full font-bold text-sm shadow"></span>
+            </div>
+
+            <!-- พื้นที่ไฟทั้ง 5 ดวงแบบเรียลไทม์ (โชว์ทันทีตั้งแต่เริ่มกระพริบ) -->
+            <div id="arena-area">
+                <div class="grid grid-cols-5 gap-4 mb-8">
+                    <button id="light-1" onclick="hitLight(1)" class="light-bulb h-32 md:h-40 rounded-2xl bg-slate-800 border-4 border-slate-600 flex flex-col items-center justify-center cursor-pointer">
+                        <span class="text-3xl font-black">1</span>
+                        <span class="text-xs opacity-75 mt-1">กล่องไฟ 1</span>
+                    </button>
+                    <button id="light-2" onclick="hitLight(2)" class="light-bulb h-32 md:h-40 rounded-2xl bg-slate-800 border-4 border-slate-600 flex flex-col items-center justify-center cursor-pointer">
+                        <span class="text-3xl font-black">2</span>
+                        <span class="text-xs opacity-75 mt-1">กล่องไฟ 2</span>
+                    </button>
+                    <button id="light-3" onclick="hitLight(3)" class="light-bulb h-32 md:h-40 rounded-2xl bg-slate-800 border-4 border-slate-600 flex flex-col items-center justify-center cursor-pointer">
+                        <span class="text-3xl font-black">3</span>
+                        <span class="text-xs opacity-75 mt-1">กล่องไฟ 3</span>
+                    </button>
+                    <button id="light-4" onclick="hitLight(4)" class="light-bulb h-32 md:h-40 rounded-2xl bg-slate-800 border-4 border-slate-600 flex flex-col items-center justify-center cursor-pointer">
+                        <span class="text-3xl font-black">4</span>
+                        <span class="text-xs opacity-75 mt-1">กล่องไฟ 4</span>
+                    </button>
+                    <button id="light-5" onclick="hitLight(5)" class="light-bulb h-32 md:h-40 rounded-2xl bg-slate-800 border-4 border-slate-600 flex flex-col items-center justify-center cursor-pointer">
+                        <span class="text-3xl font-black">5</span>
+                        <span class="text-xs opacity-75 mt-1">กล่องไฟ 5</span>
+                    </button>
+                </div>
+
+                <!-- ข้อมูลการกดแบบเรียลไทม์ -->
+                <div class="bg-slate-800 rounded-xl border border-slate-700 p-4">
+                    <h3 class="font-bold text-emerald-400 mb-3">📡 ข้อมูลการกดปุ่มแบบเรียลไทม์ (Real-time Logs)</h3>
+                    <div id="realtime-log-list" class="space-y-2 max-h-56 overflow-y-auto text-sm"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 5. หน้าสรุปผลทดสอบ ==================== -->
+        <section id="view-game-result" class="hidden">
+            <div class="bg-slate-800 rounded-2xl border border-slate-700 p-8 max-w-3xl mx-auto">
+                <div class="text-center mb-6">
+                    <div class="text-emerald-400 font-bold text-lg">🎉 จบการทดสอบเรียบร้อยแล้ว</div>
+                    <h2 id="res-title" class="text-2xl font-bold mt-1">สรุปผลการวัดเวลาตอบสนอง</h2>
+                    <p class="text-slate-400 text-sm mt-1">ข้อมูลถูกบันทึกลงฐานข้อมูล SQLite3 ถาวรเรียบร้อยแล้ว</p>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 text-center">
+                    <div class="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                        <div class="text-slate-400 text-xs">เวลาเฉลี่ย (Avg)</div>
+                        <div id="res-avg" class="text-2xl font-bold text-emerald-400 mt-1">-</div>
+                    </div>
+                    <div class="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                        <div class="text-slate-400 text-xs">เร็วที่สุด (Best)</div>
+                        <div id="res-best" class="text-2xl font-bold text-amber-400 mt-1">-</div>
+                    </div>
+                    <div class="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                        <div class="text-slate-400 text-xs">กดสำเร็จ (Hits)</div>
+                        <div id="res-hits" class="text-2xl font-bold text-blue-400 mt-1">-</div>
+                    </div>
+                    <div class="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                        <div class="text-slate-400 text-xs">กดพลาด (Errors)</div>
+                        <div id="res-errors" class="text-2xl font-bold text-rose-400 mt-1">0</div>
+                    </div>
+                </div>
+
+                <div id="res-fatigue-box" class="hidden bg-indigo-950/60 border border-indigo-500/40 rounded-xl p-4 mb-6 text-sm text-indigo-200"></div>
+
+                <div class="bg-slate-900 rounded-xl p-4 mb-6 max-h-60 overflow-y-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="text-slate-400 border-b border-slate-700">
+                            <tr>
+                                <th class="py-2">ครั้งที่</th>
+                                <th class="py-2">กล่องไฟ</th>
+                                <th class="py-2">สถานะ</th>
+                                <th class="py-2">เวลาตอบสนอง</th>
+                            </tr>
+                        </thead>
+                        <tbody id="res-log-table" class="divide-y divide-slate-800"></tbody>
+                    </table>
+                </div>
+
+                <div class="flex gap-4">
+                    <button onclick="openGameIntro(currentGameKey)" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold">🔄 เล่นโหมดนี้อีกครั้ง</button>
+                    <button onclick="showView('game-select')" class="flex-1 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold">🎮 เปลี่ยนเกม</button>
+                    <button onclick="showView('dashboard')" class="flex-1 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold">📊 หน้าแดชบอร์ด</button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal ดู Logs เชิงลึก -->
+    <div id="log-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-emerald-400">รายละเอียดการกด (Response Logs)</h3>
+                <button onclick="document.getElementById('log-modal').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <div id="modal-log-content" class="max-h-72 overflow-y-auto text-sm space-y-2"></div>
+        </div>
+    </div>
+
+    <script>
+        const ALL_COLOR_CLASSES = ['light-green', 'light-red', 'light-blue', 'light-yellow', 'light-purple', 'light-hit'];
+        const COLOR_INFO = {
+            blue:   { label: 'สีน้ำเงิน', css: 'light-blue',   badge: 'bg-blue-600 text-white' },
+            green:  { label: 'สีเขียว',  css: 'light-green',  badge: 'bg-emerald-600 text-white' },
+            red:    { label: 'สีแดง',    css: 'light-red',    badge: 'bg-red-600 text-white' },
+            yellow: { label: 'สีเหลือง', css: 'light-yellow', badge: 'bg-yellow-500 text-slate-900' },
+            purple: { label: 'สีม่วง',   css: 'light-purple', badge: 'bg-purple-600 text-white' }
+        };
+
+        const GAMES = {
+            simple: {
+                name: 'Game 1: Simple Reaction',
+                lights: 1,
+                badge: '💡 ใช้กล่องไฟจำนวน 1 ดวง (ดวงที่ 3 ตรงกลาง)',
+                desc: 'เมื่อเริ่มเกม ไฟดวงตรงกลางจะสุ่มสว่างเป็นสีเขียว ให้รีบกดให้เร็วที่สุดเพื่อวัดความไวพื้นฐานของระบบประสาท',
+                gif: '/static/game1.gif',
+                hasRounds: true
+            },
+            choice: {
+                name: 'Game 2: Choice Reaction (5 Lights)',
+                lights: 5,
+                badge: '💡 ใช้กล่องไฟจำนวน 5 ดวง (สุ่มตำแหน่ง)',
+                desc: 'ไฟทั้ง 5 ดวงจะสุ่มสว่างขึ้นทีละดวง ให้รีบกดปุ่มที่ไฟสว่างให้เร็วที่สุด ระบบจะบันทึกเวลาตอบสนองทุกครั้งแบบเรียลไทม์',
+                gif: '/static/game2.gif',
+                hasRounds: true
+            },
+            gonogo: {
+                name: 'Game 3: Go / No-Go (แยกแยะสี)',
+                lights: 5,
+                badge: '🚦 ใช้กล่องไฟจำนวน 5 ดวง (สีเขียว = กด | สีแดง = ห้ามกด)',
+                desc: 'หากไฟขึ้นสีเขียวให้รีบกดทันที แต่หากไฟขึ้นสีแดงห้ามกดเด็ดขาด (รอ 1.5 วินาทีไฟจะดับเอง) หากกดสีแดงจะนับเป็นกดพลาด',
+                gif: '/static/game3.gif',
+                hasRounds: true
+            },
+            blitz: {
+                name: 'Game 4: Speed Blitz (30s)',
+                lights: 5,
+                badge: '🔥 ใช้กล่องไฟจำนวน 5 ดวง (จับเวลา 30 วินาที)',
+                desc: 'กดไฟสีเขียวให้ได้จำนวนครั้งมากที่สุดภายใน 30 วินาที ไฟดวงถัดไปจะติดทันทีเมื่อกดโดน พร้อมวิเคราะห์ความเหนื่อยล้าท้ายเกม',
+                gif: '/static/game4.gif',
+                hasRounds: false
+            },
+            colormatch: {
+                name: 'Game 5: Color Match',
+                lights: 5,
+                badge: '🎨 ใช้กล่องไฟจำนวน 5 ดวง (สุ่มขึ้นหลายสีพร้อมกัน)',
+                desc: 'ไฟทั้ง 5 ดวงจะสว่างขึ้นพร้อมกันเป็นสีที่ต่างกัน ให้มองหาและรีบกดเฉพาะปุ่มที่เป็น "สีเป้าหมาย" ที่กำหนดไว้เท่านั้น',
+                gif: '/static/game5.gif',
+                hasRounds: true
+            }
+        };
+
+        let allSessionsCache = [];
+        let currentGameKey = 'choice';
+        let currentPlayerName = '';
+        let currentSportType = 'ทั่วไป';
+        let targetColorKey = 'blue';
+
+        // ตัวแปรควบคุมขณะเล่น
+        let gameActive = false;
+        let isStarting = false;
+        let totalRounds = 10;
+        let currentRound = 0;
+        let errorCount = 0;
+        let activeLight = null;
+        let activeColor = 'green';
+        let lastLight = null;
+        let lightOnTimestamp = 0;
+        let sessionLogs = [];
+        let blinkTimeouts = [];
+        let nextLightTimeout = null;
+        let noGoTimeout = null;
+        let blitzTimer = null;
+        let blitzSecondsLeft = 30;
+
+        function showView(viewName) {
+            ['dashboard', 'game-select', 'game-intro', 'game-play', 'game-result'].forEach(v => {
+                document.getElementById('view-' + v).classList.add('hidden');
+            });
+            document.getElementById('view-' + viewName).classList.remove('hidden');
+            if (viewName === 'dashboard') loadDashboard();
+        }
+
+        function selectTargetColor(colorKey) {
+            targetColorKey = colorKey;
+            document.querySelectorAll('.color-opt').forEach(btn => {
+                const isSelected = btn.getAttribute('data-color') === colorKey;
+                btn.classList.toggle('border-white', isSelected);
+                btn.classList.toggle('border-transparent', !isSelected);
+                btn.classList.toggle('opacity-70', !isSelected);
+                btn.classList.toggle('scale-105', isSelected);
+            });
+        }
+
+        async function loadDashboard() {
+            const res = await fetch('/api/dashboard');
+            const data = await res.json();
+            allSessionsCache = data.sessions;
+
+            document.getElementById('stat-players').innerText = data.summary.total_players || 0;
+            document.getElementById('stat-total').innerText = data.summary.total || 0;
+            document.getElementById('stat-avg').innerText = data.summary.overall_avg ? data.summary.overall_avg.toFixed(1) + ' ms' : '-';
+            document.getElementById('stat-best').innerText = data.summary.overall_best ? data.summary.overall_best.toFixed(1) + ' ms' : '-';
+
+            renderSessionsTable(allSessionsCache);
+        }
+
+        function renderSessionsTable(sessions) {
+            const tbody = document.getElementById('db-table-body');
+            if (sessions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400">ยังไม่มีประวัติการทดสอบ กดปุ่ม "🎮 เลือกเกม" เพื่อเริ่มเล่น</td></tr>';
+                return;
+            }
+            tbody.innerHTML = sessions.map(s => `
+                <tr class="hover:bg-slate-700/30">
+                    <td class="p-3">#${s.id}</td>
+                    <td class="p-3 font-medium text-white">${s.athlete_name || 'ไม่ระบุ'} <span class="text-xs text-slate-400">(${s.sport_type || '-'})</span></td>
+                    <td class="p-3 text-slate-300">${s.mode}</td>
+                    <td class="p-3"><span class="text-emerald-400 font-bold">${s.total_hits || 0}</span> / <span class="text-rose-400">${s.errors || 0}</span></td>
+                    <td class="p-3 font-bold text-emerald-400">${s.avg_time_ms} ms</td>
+                    <td class="p-3 font-bold text-amber-400">${s.best_time_ms} ms</td>
+                    <td class="p-3 text-slate-400 text-xs">${s.created_at}</td>
+                    <td class="p-3"><button onclick="viewSessionLogs(${s.id})" class="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs">ดู Logs</button></td>
+                </tr>
+            `).join('');
+        }
+
+        function filterTable() {
+            const keyword = document.getElementById('search-player').value.toLowerCase();
+            const filtered = allSessionsCache.filter(s => (s.athlete_name || '').toLowerCase().includes(keyword));
+            renderSessionsTable(filtered);
+        }
+
+        async function viewSessionLogs(sessionId) {
+            const res = await fetch(`/api/sessions/${sessionId}/logs`);
+            const logs = await res.json();
+            document.getElementById('modal-log-content').innerHTML = logs.map(l => `
+                <div class="flex justify-between bg-slate-900 p-2.5 rounded-lg border border-slate-700">
+                    <span>ครั้งที่ ${l.round_no} | 💡 กล่องไฟ <b>#${l.light_number}</b></span>
+                    <span class="${l.status === 'error' ? 'text-rose-400' : 'text-emerald-400'} font-bold">
+                        ${l.status === 'error' ? 'กดพลาด' : l.response_time_ms + ' ms'}
+                    </span>
+                </div>
+            `).join('');
+            document.getElementById('log-modal').classList.remove('hidden');
+        }
+
+        async function openGameIntro(gameKey) {
+            currentGameKey = gameKey;
+            const cfg = GAMES[gameKey];
+
+            document.getElementById('intro-light-badge').innerText = cfg.badge;
+            document.getElementById('intro-title').innerText = cfg.name;
+            document.getElementById('intro-desc').innerText = cfg.desc;
+            document.getElementById('round-setting-box').classList.toggle('hidden', !cfg.hasRounds);
+            document.getElementById('color-setting-box').classList.toggle('hidden', gameKey !== 'colormatch');
+
+            const imgEl = document.getElementById('intro-gif');
+            const fallbackEl = document.getElementById('gif-fallback');
+            imgEl.style.display = 'block';
+            fallbackEl.classList.add('hidden');
+            imgEl.src = cfg.gif;
+            document.getElementById('gif-path-hint').innerText = cfg.gif;
+            imgEl.onerror = () => {
+                imgEl.style.display = 'none';
+                fallbackEl.classList.remove('hidden');
+            };
+
+            const res = await fetch('/api/athletes');
+            const athletes = await res.json();
+            document.getElementById('player-history-list').innerHTML = athletes
+                .map(a => `<option value="${a.name}">`).join('');
+
+            showView('game-intro');
+        }
+
+        // เริ่มเกม: โชว์ปุ่มทันที -> กระพริบแดง 4 รอบ -> รอบที่ 5 สีเขียว -> เริ่มเกม!
+        function startGameFlow() {
+            const nameInput = document.getElementById('input-player-name').value.trim();
+            if (!nameInput) {
+                alert('กรุณาพิมพ์ชื่อผู้เล่นก่อนกดเริ่มเกม');
+                document.getElementById('input-player-name').focus();
+                return;
+            }
+            currentPlayerName = nameInput;
+            currentSportType = document.getElementById('input-sport-type').value.trim() || 'ทั่วไป';
+            totalRounds = parseInt(document.getElementById('input-rounds').value) || 10;
+
+            currentRound = 0;
+            errorCount = 0;
+            sessionLogs = [];
+            activeLight = null;
+            lastLight = null;
+            gameActive = false;
+            isStarting = true;
+            clearAllBlinkTimeouts();
+
+            showView('game-play');
+            document.getElementById('live-player').innerText = currentPlayerName;
+            document.getElementById('realtime-log-list').innerHTML = '';
+            resetAllLights();
+
+            // แสดงแถบสีเป้าหมายเฉพาะเกม 5
+            const banner = document.getElementById('target-color-banner');
+            if (currentGameKey === 'colormatch') {
+                const cInfo = COLOR_INFO[targetColorKey];
+                const chip = document.getElementById('target-color-chip');
+                chip.innerText = cInfo.label;
+                chip.className = `px-4 py-1 rounded-full font-bold text-sm shadow ${cInfo.badge}`;
+                banner.classList.remove('hidden');
+            } else {
+                banner.classList.add('hidden');
+            }
+
+            // ปรับสถานะปุ่มตามโหมด (Simple ใช้เฉพาะดวงที่ 3)
+            const activeIndexes = currentGameKey === 'simple' ? [3] : [1, 2, 3, 4, 5];
+            for (let i = 1; i <= 5; i++) {
+                const el = document.getElementById(`light-${i}`);
+                el.classList.toggle('light-disabled', !activeIndexes.includes(i));
+            }
+
+            if (currentGameKey === 'blitz') {
+                blitzSecondsLeft = 30;
+                document.getElementById('live-counter-label').innerText = 'เวลาที่เหลือ:';
+                document.getElementById('live-counter').innerText = '30s';
+            } else {
+                document.getElementById('live-counter-label').innerText = 'รอบที่:';
+                document.getElementById('live-counter').innerText = `0 / ${totalRounds}`;
+            }
+
+            // ลำดับไฟกระพริบเตรียมพร้อม: สีแดง 4 รอบ + รอบสุดท้ายสีเขียว
+            const stepDuration = 900; // รอบละ 0.9 วินาที (ติด 0.55 วิ / ดับ 0.35 วิ)
+            for (let step = 1; step <= 4; step++) {
+                const onTime = (step - 1) * stepDuration;
+                const offTime = onTime + 550;
+
+                blinkTimeouts.push(setTimeout(() => {
+                    if (!isStarting) return;
+                    document.getElementById('live-status').innerText = `🔴 เตรียมพร้อม... (${step}/4)`;
+                    setLightsColor(activeIndexes, 'light-red');
+                }, onTime));
+
+                blinkTimeouts.push(setTimeout(() => {
+                    if (!isStarting) return;
+                    resetAllLights();
+                }, offTime));
+            }
+
+            // รอบที่ 5: กระพริบสีเขียว (GO!)
+            const greenStartTime = 4 * stepDuration;
+            blinkTimeouts.push(setTimeout(() => {
+                if (!isStarting) return;
+                document.getElementById('live-status').innerText = '🟢 เริ่มได้! (GO!)';
+                setLightsColor(activeIndexes, 'light-green');
+            }, greenStartTime));
+
+            // จบไฟเขียว -> เริ่มเกมจริง
+            blinkTimeouts.push(setTimeout(() => {
+                if (!isStarting) return;
+                isStarting = false;
+                gameActive = true;
+                resetAllLights();
+
+                if (currentGameKey === 'gonogo') {
+                    document.getElementById('live-status').innerText = '🟢 กดสีเขียว | 🔴 ห้ามกดสีแดง!';
+                } else if (currentGameKey === 'colormatch') {
+                    document.getElementById('live-status').innerText = `🎨 กดเฉพาะปุ่ม "${COLOR_INFO[targetColorKey].label}" เท่านั้น!`;
+                } else {
+                    document.getElementById('live-status').innerText = '🟢 กำลังทดสอบ (กดไฟให้เร็วที่สุด!)';
+                }
+
+                if (currentGameKey === 'blitz') startBlitzTimer();
+                triggerNextLight();
+            }, greenStartTime + 650));
+        }
+
+        function setLightsColor(indexes, cssClass) {
+            resetAllLights();
+            indexes.forEach(i => document.getElementById(`light-${i}`).classList.add(cssClass));
+        }
+
+        function clearAllBlinkTimeouts() {
+            blinkTimeouts.forEach(t => clearTimeout(t));
+            blinkTimeouts = [];
+        }
+
+        function startBlitzTimer() {
+            blitzTimer = setInterval(() => {
+                blitzSecondsLeft--;
+                document.getElementById('live-counter').innerText = `${blitzSecondsLeft}s`;
+                if (blitzSecondsLeft <= 0) {
+                    clearInterval(blitzTimer);
+                    finishGame();
+                }
+            }, 1000);
+        }
+
+        function triggerNextLight() {
+            if (!gameActive) return;
+            resetAllLights();
+            clearTimeout(noGoTimeout);
+
+            const delay = currentGameKey === 'blitz' ? 80 : (Math.floor(Math.random() * 750) + 400);
+
+            nextLightTimeout = setTimeout(() => {
+                if (!gameActive) return;
+
+                // โหมดเกม 5: Color Match (สุ่มสีขึ้นครบทั้ง 5 ปุ่ม โดยมี 1 ปุ่มเป็นสีเป้าหมาย)
+                if (currentGameKey === 'colormatch') {
+                    const targetPos = Math.floor(Math.random() * 5) + 1;
+                    activeLight = targetPos;
+                    activeColor = targetColorKey;
+
+                    const otherColors = Object.keys(COLOR_INFO).filter(c => c !== targetColorKey);
+                    // สลับตำแหน่งสีหลอกแบบสุ่ม
+                    for (let i = otherColors.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [otherColors[i], otherColors[j]] = [otherColors[j], otherColors[i]];
+                    }
+
+                    let distractorIdx = 0;
+                    for (let i = 1; i <= 5; i++) {
+                        const colorToUse = (i === targetPos) ? targetColorKey : otherColors[distractorIdx++];
+                        document.getElementById(`light-${i}`).classList.add(COLOR_INFO[colorToUse].css);
+                    }
+                    lightOnTimestamp = performance.now();
+                    return;
+                }
+
+                // โหมดเกม 1 - 4
+                let lightNum = 3;
+                if (currentGameKey !== 'simple') {
+                    do {
+                        lightNum = Math.floor(Math.random() * 5) + 1;
+                    } while (currentGameKey === 'blitz' && lightNum === lastLight);
+                }
+                lastLight = lightNum;
+                activeLight = lightNum;
+
+                activeColor = (currentGameKey === 'gonogo' && Math.random() < 0.30) ? 'red' : 'green';
+                lightOnTimestamp = performance.now();
+
+                const el = document.getElementById(`light-${lightNum}`);
+                el.classList.add(activeColor === 'red' ? 'light-red' : 'light-green');
+
+                if (activeColor === 'red') {
+                    noGoTimeout = setTimeout(() => {
+                        if (!gameActive || activeLight !== lightNum) return;
+                        activeLight = null;
+                        appendRealtimeLog(`✅ ปล่อยผ่านไฟสีแดง (#${lightNum}) ได้ถูกต้อง`, 'text-blue-400');
+                        triggerNextLight();
+                    }, 1500);
+                }
+            }, delay);
+        }
+
+        function hitLight(lightNum) {
+            if (!gameActive || activeLight === null) return;
+
+            // ตรวจสอบการกดของเกม 5 (Color Match)
+            if (currentGameKey === 'colormatch') {
+                const reactionTime = Math.round(performance.now() - lightOnTimestamp);
+                const isCorrect = (lightNum === activeLight);
+                activeLight = null;
+                resetAllLights();
+
+                if (!isCorrect) {
+                    errorCount++;
+                    sessionLogs.push({
+                        round_no: sessionLogs.length + 1,
+                        light_number: lightNum,
+                        response_time_ms: reactionTime,
+                        status: 'error'
+                    });
+                    appendRealtimeLog(`❌ กดผิดสี! กล่องไฟ #${lightNum} ไม่ใช่${COLOR_INFO[targetColorKey].label} (${reactionTime} ms)`, 'text-rose-400');
+                    setTimeout(triggerNextLight, 350);
+                    return;
+                }
+
+                // กดถูกสีเป้าหมาย
+                document.getElementById(`light-${lightNum}`).classList.add('light-hit');
+                currentRound++;
+                sessionLogs.push({
+                    round_no: currentRound,
+                    light_number: lightNum,
+                    response_time_ms: reactionTime,
+                    status: 'valid'
+                });
+                document.getElementById('live-counter').innerText = `${currentRound} / ${totalRounds}`;
+                appendRealtimeLog(`ครั้งที่ ${currentRound} → กด${COLOR_INFO[targetColorKey].label} (#${lightNum}) ถูกต้อง | ${reactionTime} ms`, 'text-emerald-400');
+
+                if (currentRound >= totalRounds) {
+                    finishGame();
+                } else {
+                    setTimeout(triggerNextLight, 220);
+                }
+                return;
+            }
+
+            // ตรวจสอบการกดของเกม 1 - 4
+            if (activeLight !== lightNum) return;
+
+            clearTimeout(noGoTimeout);
+            const reactionTime = Math.round(performance.now() - lightOnTimestamp);
+            activeLight = null;
+
+            const btn = document.getElementById(`light-${lightNum}`);
+            btn.classList.remove('light-green', 'light-red');
+
+            if (activeColor === 'red') {
+                errorCount++;
+                sessionLogs.push({
+                    round_no: sessionLogs.length + 1,
+                    light_number: lightNum,
+                    response_time_ms: reactionTime,
+                    status: 'error'
+                });
+                appendRealtimeLog(`❌ กดพลาด! ไฟกล่อง #${lightNum} เป็นสีแดง (${reactionTime} ms)`, 'text-rose-400');
+                setTimeout(triggerNextLight, 400);
+                return;
+            }
+
+            btn.classList.add('light-hit');
+            currentRound++;
+            sessionLogs.push({
+                round_no: currentRound,
+                light_number: lightNum,
+                response_time_ms: reactionTime,
+                status: 'valid'
+            });
+
+            if (currentGameKey !== 'blitz') {
+                document.getElementById('live-counter').innerText = `${currentRound} / ${totalRounds}`;
+            }
+            appendRealtimeLog(`ครั้งที่ ${currentRound} → กดกล่องไฟ #${lightNum} | ${reactionTime} ms`, 'text-emerald-400');
+
+            if (currentGameKey !== 'blitz' && currentRound >= totalRounds) {
+                finishGame();
+            } else {
+                setTimeout(triggerNextLight, currentGameKey === 'blitz' ? 60 : 220);
+            }
+        }
+
+        function appendRealtimeLog(text, colorClass) {
+            const box = document.getElementById('realtime-log-list');
+            box.insertAdjacentHTML('afterbegin', `
+                <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-700 font-medium ${colorClass}">
+                    ${text}
+                </div>
+            `);
+        }
+
+        function resetAllLights() {
+            for (let i = 1; i <= 5; i++) {
+                document.getElementById(`light-${i}`).classList.remove(...ALL_COLOR_CLASSES);
+            }
+        }
+
+        function abortGame() {
+            isStarting = false;
+            gameActive = false;
+            clearAllBlinkTimeouts();
+            clearInterval(blitzTimer);
+            clearTimeout(nextLightTimeout);
+            clearTimeout(noGoTimeout);
+            resetAllLights();
+            showView('game-select');
+        }
+
+        async function finishGame() {
+            gameActive = false;
+            clearInterval(blitzTimer);
+            clearTimeout(nextLightTimeout);
+            clearTimeout(noGoTimeout);
+            resetAllLights();
+
+            const cfg = GAMES[currentGameKey];
+            const modeLabel = currentGameKey === 'colormatch'
+                ? `${cfg.name} (${COLOR_INFO[targetColorKey].label})`
+                : cfg.name;
+
+            await fetch('/api/save_game', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    player_name: currentPlayerName,
+                    sport_type: currentSportType,
+                    mode: modeLabel,
+                    total_lights: cfg.lights,
+                    errors: errorCount,
+                    logs: sessionLogs
+                })
+            });
+
+            const validTimes = sessionLogs.filter(l => l.status === 'valid').map(l => l.response_time_ms);
+            const avg = validTimes.length ? (validTimes.reduce((a, b) => a + b, 0) / validTimes.length).toFixed(1) : 0;
+            const best = validTimes.length ? Math.min(...validTimes) : 0;
+
+            document.getElementById('res-title').innerText = `${modeLabel} — ${currentPlayerName}`;
+            document.getElementById('res-avg').innerText = `${avg} ms`;
+            document.getElementById('res-best').innerText = `${best} ms`;
+            document.getElementById('res-hits').innerText = validTimes.length;
+            document.getElementById('res-errors').innerText = errorCount;
+
+            const fatigueBox = document.getElementById('res-fatigue-box');
+            if (currentGameKey === 'blitz' && validTimes.length >= 4) {
+                const half = Math.floor(validTimes.length / 2);
+                const firstHalfAvg = (validTimes.slice(0, half).reduce((a, b) => a + b, 0) / half).toFixed(1);
+                const secondHalfAvg = (validTimes.slice(half).reduce((a, b) => a + b, 0) / (validTimes.length - half)).toFixed(1);
+                const diff = (secondHalfAvg - firstHalfAvg).toFixed(1);
+                fatigueBox.innerHTML = `📊 <b>ดัชนีความเหนื่อยล้า (Fatigue Analysis):</b> ช่วงครึ่งแรกเฉลี่ย <b>${firstHalfAvg} ms</b> | ช่วงครึ่งหลังเฉลี่ย <b>${secondHalfAvg} ms</b> (${diff > 0 ? 'ช้าลง +' + diff + ' ms' : 'เร็วขึ้น ' + diff + ' ms'})`;
+                fatigueBox.classList.remove('hidden');
+            } else {
+                fatigueBox.classList.add('hidden');
+            }
+
+            document.getElementById('res-log-table').innerHTML = sessionLogs.map(l => `
+                <tr>
+                    <td class="py-2">ครั้งที่ ${l.round_no}</td>
+                    <td class="py-2">💡 ดวงที่ ${l.light_number}</td>
+                    <td class="py-2 ${l.status === 'error' ? 'text-rose-400' : 'text-emerald-400'}">${l.status === 'error' ? 'กดพลาด' : 'สำเร็จ'}</td>
+                    <td class="py-2 font-bold">${l.response_time_ms} ms</td>
+                </tr>
+            `).join('');
+
+            showView('game-result');
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>
